@@ -9,6 +9,7 @@
     "preview": "vite preview --port 4173 --strictPort"
   },
   "dependencies": {
+    "@sentry/react": "^10.73.0",
     "lucide-react": "^0.436.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

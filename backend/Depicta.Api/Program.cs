@@ -27,6 +27,10 @@ if (args.Length >= 2 && args[0] == "hash")
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Error tracking. Reads the DSN from config ("Sentry:Dsn" / env Sentry__Dsn). With no DSN it's a
+// no-op, so local dev needs no setup; unhandled exceptions are captured automatically in prod.
+builder.WebHost.UseSentry();
+
 builder.Services.AddControllers().AddJsonOptions(o =>
 {
     // Emit enums as snake_case strings (e.g. "pending_review") to match the frontend contract.

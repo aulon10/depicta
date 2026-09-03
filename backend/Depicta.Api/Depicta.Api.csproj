@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.8" />
+    <!-- Error tracking (no-op when no DSN is configured, e.g. local dev). -->
+    <PackageReference Include="Sentry.AspNetCore" Version="5.9.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
     <!-- SQLite for zero-setup local dev; PostgreSQL for production. Provider is chosen in config. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
