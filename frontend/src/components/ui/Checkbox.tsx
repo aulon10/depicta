@@ -18,7 +18,7 @@ export function Checkbox({ checked, indeterminate, onChange, ...rest }: Props) {
       onClick={() => onChange(!checked)}
       className={cn(
         'grid h-[18px] w-[18px] place-items-center rounded-[5px] border transition-colors duration-150 ease-out',
-        active ? 'bg-brand-700 border-brand-700 text-white' : 'bg-white border-zinc-300 hover:border-zinc-400',
+        active ? 'bg-brand-700 border-brand-700 text-white' : 'bg-surface border-line-strong hover:border-fg-subtle',
       )}
       {...rest}
     >

@@ -18,9 +18,9 @@ const sizes = {
 const variants: Record<Variant, string> = {
   // single intentional accent for key actions
   primary: 'bg-brand-700 text-white hover:bg-brand-800 shadow-sm',
-  secondary: 'bg-white text-zinc-800 border border-zinc-200 hover:bg-zinc-50 hover:border-zinc-300',
-  ghost: 'text-zinc-600 hover:bg-zinc-100',
-  danger: 'bg-white text-red-700 border border-zinc-200 hover:border-red-200 hover:bg-red-50',
+  secondary: 'bg-surface text-fg border border-line hover:bg-surface-2 hover:border-line-strong',
+  ghost: 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+  danger: 'bg-surface text-red-600 dark:text-red-400 border border-line hover:border-red-300 hover:bg-red-50 dark:hover:border-red-500/40 dark:hover:bg-red-500/10',
 }
 
 export function Button({ variant = 'secondary', size = 'md', className, ...rest }: Props) {

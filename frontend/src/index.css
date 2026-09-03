@@ -4,6 +4,27 @@
 
 :root {
   color-scheme: light;
+  /* Semantic palette — light */
+  --bg: #fafaf9;          /* page ground */
+  --surface: #ffffff;     /* cards, panels */
+  --surface-2: #f4f4f5;   /* subtle fills, hovers */
+  --line: #e4e4e7;        /* borders */
+  --line-strong: #d4d4d8;
+  --fg: #18181b;          /* primary text */
+  --fg-muted: #71717a;    /* secondary text */
+  --fg-subtle: #a1a1aa;   /* tertiary text */
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #0a0a0b;
+  --surface: #161618;
+  --surface-2: #1f1f23;
+  --line: #29292e;
+  --line-strong: #3f3f46;
+  --fg: #f4f4f5;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #71717a;
 }
 
 html, body, #root {
@@ -12,10 +33,10 @@ html, body, #root {
 
 body {
   margin: 0;
-  /* warm neutral off-white ground, per the design manifesto */
-  background: #fafaf9;
-  color: #18181b;
+  background: var(--bg);
+  color: var(--fg);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* tabular numerals wherever counts line up */
@@ -25,7 +46,7 @@ body {
 
 /* restrained, crisp focus ring on the single accent */
 :where(button, [role="button"], input, textarea, a):focus-visible {
-  outline: 2px solid #0f9d70;
+  outline: 2px solid #12b886;
   outline-offset: 2px;
   border-radius: 6px;
 }
@@ -33,6 +54,18 @@ body {
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+/* skeleton loading shimmer, theme-aware via tokens */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--line) 37%, var(--surface-2) 63%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

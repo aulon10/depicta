@@ -29,16 +29,16 @@ function Toast({ toast, onDismiss }: { toast: ToastData; onDismiss: (id: string)
     <div
       role="status"
       className={cn(
-        'flex items-center gap-2.5 rounded-lg border bg-white px-3.5 py-2.5 text-sm shadow-lg',
+        'flex items-center gap-2.5 rounded-lg border bg-surface px-3.5 py-2.5 text-sm shadow-lg',
         'animate-[slideIn_.15s_cubic-bezier(0.16,1,0.3,1)]',
-        error ? 'border-red-200' : 'border-zinc-200',
+        error ? 'border-red-200 dark:border-red-500/40' : 'border-line',
       )}
     >
-      <span className={cn('grid h-5 w-5 place-items-center rounded-full', error ? 'bg-red-100 text-red-700' : 'bg-brand-100 text-brand-800')}>
+      <span className={cn('grid h-5 w-5 place-items-center rounded-full', error ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300' : 'bg-brand-100 text-brand-800 dark:bg-brand-500/20 dark:text-brand-300')}>
         {error ? <AlertTriangle size={13} /> : <Check size={13} />}
       </span>
-      <span className="text-zinc-800">{toast.message}</span>
-      <button onClick={() => onDismiss(toast.id)} className="ml-1 text-zinc-400 hover:text-zinc-600">
+      <span className="text-fg">{toast.message}</span>
+      <button onClick={() => onDismiss(toast.id)} className="ml-1 text-fg-subtle hover:text-fg">
         <X size={14} />
       </button>
     </div>

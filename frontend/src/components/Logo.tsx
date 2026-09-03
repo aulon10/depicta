@@ -21,7 +21,7 @@ export function Logo({
     <span className={cn('inline-flex items-center gap-2.5', className)}>
       <LogoMark px={tile} />
       {showWordmark && (
-        <span className={cn('font-display font-bold tracking-[-0.03em] text-zinc-900', text)}>
+        <span className={cn('font-display font-bold tracking-[-0.03em] text-fg', text)}>
           Depicta
         </span>
       )}

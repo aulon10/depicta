@@ -13,9 +13,13 @@ import { Checkbox } from './components/ui/Checkbox'
 import { MediaReviewRow } from './components/MediaReviewRow'
 import { SettingsView } from './components/SettingsView'
 import { LoginView } from './components/LoginView'
+import { ThemeToggle } from './components/ThemeToggle'
 import { Logo, LogoMark } from './components/Logo'
 import { ToastStack, type ToastData } from './components/ui/Toast'
+import { useTheme } from './lib/useTheme'
 import { cn } from './lib/cn'
+
+const SESSION_KEY = 'depicta.session'
 
 type View = 'pending_review' | 'applied' | 'all' | 'settings'
 
@@ -31,6 +35,7 @@ export default function App() {
     return base ? new HttpApiClient(base) : new MockApiClient()
   }, [])
   const usingMock = useMemo(() => !import.meta.env.VITE_API_BASE, [])
+  const { theme, toggle } = useTheme()
 
   const [session, setSession] = useState<AuthSession | null>(null)
   const [items, setItems] = useState<MediaItem[]>([])
@@ -40,6 +45,7 @@ export default function App() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [edits, setEdits] = useState<Record<string, string>>({})
   const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
@@ -50,28 +56,57 @@ export default function App() {
   }, [])
   const dismiss = useCallback((id: string) => setToasts((t) => t.filter((x) => x.id !== id)), [])
 
+  // Persist the session in sessionStorage: it survives a refresh in the same tab, is cleared when
+  // the tab closes, and stays out of localStorage (shorter window of exposure if the page is ever
+  // hit by XSS). Wrapped in try/catch because storage can be unavailable/throw in some contexts.
+  const persist = useCallback((s: AuthSession | null) => {
+    try {
+      if (s) sessionStorage.setItem(SESSION_KEY, JSON.stringify(s))
+      else sessionStorage.removeItem(SESSION_KEY)
+    } catch { /* storage unavailable — the session simply stays in memory only */ }
+  }, [])
+
   // Any call that comes back 401 means the token is gone/expired: drop to the login screen.
   const handleAuthError = useCallback((err: unknown): boolean => {
     if (err instanceof UnauthorizedError) {
       client.setToken(null)
       setSession(null)
+      persist(null)
       toast('Session expired — please sign in again', 'error')
       return true
     }
     return false
-  }, [client, toast])
+  }, [client, toast, persist])
 
   const login = useCallback(async (username: string, password: string) => {
     const s = await client.login(username, password) // throws on bad credentials; LoginView shows it
     client.setToken(s.token)
+    setLoading(true)
     setSession(s)
-  }, [client])
+    persist(s)
+  }, [client, persist])
 
   const logout = useCallback(() => {
     client.setToken(null)
     setSession(null)
+    persist(null)
     setItems([]); setSite(null); setScans([]); setSelected(new Set()); setEdits({})
-    setView('pending_review'); setNavOpen(false)
+    setView('pending_review'); setNavOpen(false); setLoading(true)
+  }, [client, persist])
+
+  // On first load, restore a still-valid session so a refresh doesn't force a re-login.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY)
+      if (!raw) return
+      const s = JSON.parse(raw) as AuthSession
+      if (s?.token && new Date(s.expiresAt).getTime() > Date.now()) {
+        client.setToken(s.token)
+        setSession(s)
+      } else {
+        sessionStorage.removeItem(SESSION_KEY) // expired — discard
+      }
+    } catch { /* ignore malformed/unavailable storage */ }
   }, [client])
 
   const refresh = useCallback(async () => {
@@ -90,6 +125,8 @@ export default function App() {
       client.listScans(8).then(setScans).catch((e) => handleAuthError(e))
     } catch (e) {
       if (!handleAuthError(e)) throw e
+    } finally {
+      setLoading(false)
     }
   }, [client, handleAuthError])
 
@@ -185,19 +222,20 @@ export default function App() {
   const nav = (
     <SidebarContent view={view} counts={counts} site={site} onGo={go} onLogout={logout} username={session.username} />
   )
+  const showSkeleton = view !== 'settings' && loading && items.length === 0
 
   return (
-    <div className="flex min-h-screen bg-zinc-50 text-zinc-900">
+    <div className="flex min-h-screen bg-bg text-fg">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-zinc-200 bg-white md:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface md:flex">
         {nav}
       </aside>
 
       {/* Mobile drawer */}
       {navOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-zinc-900/40" onClick={() => setNavOpen(false)} />
-          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col border-r border-zinc-200 bg-white shadow-xl">
+          <div className="absolute inset-0 bg-zinc-950/50" onClick={() => setNavOpen(false)} />
+          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col border-r border-line bg-surface shadow-xl">
             {nav}
           </aside>
         </div>
@@ -205,22 +243,25 @@ export default function App() {
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b border-zinc-200 bg-white/80 px-4 backdrop-blur sm:px-6">
+        <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b border-line bg-surface/80 px-4 backdrop-blur sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <button className="grid h-9 w-9 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100 md:hidden" onClick={() => setNavOpen(true)} aria-label="Menu">
+            <button className="grid h-9 w-9 place-items-center rounded-lg text-fg-muted hover:bg-surface-2 md:hidden" onClick={() => setNavOpen(true)} aria-label="Menu">
               <Menu size={18} />
             </button>
             <div className="min-w-0">
               <h1 className="truncate text-[15px] font-semibold leading-none">{titles[view]}</h1>
-              <p className="mt-1 truncate text-xs text-zinc-500">{subtitle}</p>
+              <p className="mt-1 truncate text-xs text-fg-muted">{subtitle}</p>
             </div>
           </div>
-          {view !== 'settings' && (
-            <Button variant="primary" onClick={scan} disabled={scanning} className="shrink-0">
-              {scanning ? <Loader2 size={15} className="animate-spin" /> : <ScanLine size={15} />}
-              <span className="hidden sm:inline">{scanning ? 'Scanning…' : 'Scan site'}</span>
-            </Button>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            <ThemeToggle theme={theme} onToggle={toggle} />
+            {view !== 'settings' && (
+              <Button variant="primary" onClick={scan} disabled={scanning}>
+                {scanning ? <Loader2 size={15} className="animate-spin" /> : <ScanLine size={15} />}
+                <span className="hidden sm:inline">{scanning ? 'Scanning…' : 'Scan site'}</span>
+              </Button>
+            )}
+          </div>
         </header>
 
         <main className="flex-1 px-4 py-6 sm:px-6">
@@ -233,25 +274,25 @@ export default function App() {
                 <StatTile label="Awaiting review" value={counts.pending_review} tone="sky" icon={Inbox} />
                 <StatTile label="Applied" value={counts.applied} tone="brand" icon={CheckCircle2} />
                 <StatTile label="Failed" value={counts.failed} tone="red" icon={AlertTriangle} />
-                <StatTile label="Alt coverage" value={`${coverage}%`} tone="zinc" icon={Layers} />
+                <CoverageTile pct={coverage} />
               </div>
 
               {/* Toolbar: search + bulk */}
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div className="relative flex-1 sm:max-w-xs">
-                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-subtle" />
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search filename or alt text…"
-                    className="h-9 w-full rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-800 placeholder:text-zinc-400 focus:border-brand-600 focus:outline-none"
+                    className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-fg-subtle focus:border-brand-500 focus:outline-none"
                   />
                 </div>
                 {view === 'pending_review' && selectablePending.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <label className="mr-1 flex items-center gap-2 text-sm text-zinc-600">
+                    <label className="mr-1 flex items-center gap-2 text-sm text-fg-muted">
                       <Checkbox checked={allSelected} indeterminate={!allSelected && someSelected} onChange={toggleSelectAll} aria-label="Select all" />
-                      {selectedIds.length > 0 ? <span className="tnum font-medium">{selectedIds.length} selected</span> : <span className="hidden sm:inline">Select all</span>}
+                      {selectedIds.length > 0 ? <span className="tnum font-medium text-fg">{selectedIds.length} selected</span> : <span className="hidden sm:inline">Select all</span>}
                     </label>
                     <Button size="sm" variant="danger" disabled={!selectedIds.length || busy} onClick={() => rejectIds(selectedIds)}>
                       <X size={13} /> Reject
@@ -264,28 +305,28 @@ export default function App() {
               </div>
 
               {/* List */}
-              <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-                {visible.length === 0 ? (
-                  <EmptyState view={view} query={query} onScan={scan} scanning={scanning} />
-                ) : (
-                  visible.map((item) => (
-                    <MediaReviewRow
-                      key={item.id}
-                      item={item}
-                      selected={selected.has(item.id)}
-                      editValue={edits[item.id] ?? item.activeProposal?.proposedAlt ?? ''}
-                      onToggleSelect={toggleSelect}
-                      onEdit={setEdit}
-                      onApprove={(id) => approveIds([id])}
-                      onReject={(id) => rejectIds([id])}
-                      onRegenerate={regenerate}
-                      onRevert={revert}
-                    />
-                  ))
-                )}
+              <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-sm">
+                {showSkeleton
+                  ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)
+                  : visible.length === 0
+                    ? <EmptyState view={view} query={query} onScan={scan} scanning={scanning} />
+                    : visible.map((item) => (
+                        <MediaReviewRow
+                          key={item.id}
+                          item={item}
+                          selected={selected.has(item.id)}
+                          editValue={edits[item.id] ?? item.activeProposal?.proposedAlt ?? ''}
+                          onToggleSelect={toggleSelect}
+                          onEdit={setEdit}
+                          onApprove={(id) => approveIds([id])}
+                          onReject={(id) => rejectIds([id])}
+                          onRegenerate={regenerate}
+                          onRevert={revert}
+                        />
+                      ))}
               </div>
 
-              <p className="mt-3 text-xs text-zinc-400">
+              <p className="mt-3 text-xs text-fg-subtle">
                 Nothing is written to your site until you approve it. Every change is reversible.
               </p>
             </>
@@ -307,6 +348,10 @@ function SidebarContent({ view, counts, site, onGo, onLogout, username }: {
   username: string
 }) {
   const host = site?.url ? site.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : null
+  const navItem = (active: boolean) => cn(
+    'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150',
+    active ? 'bg-brand-50 text-brand-800 dark:bg-brand-500/15 dark:text-brand-300' : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+  )
   return (
     <>
       <div className="px-5 py-5">
@@ -319,60 +364,47 @@ function SidebarContent({ view, counts, site, onGo, onLogout, username }: {
           const active = v.key === view
           const badge = v.key === 'all' ? counts.all : counts[v.key]
           return (
-            <button
-              key={v.key}
-              onClick={() => onGo(v.key)}
-              className={cn(
-                'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150',
-                active ? 'bg-brand-50 text-brand-800' : 'text-zinc-600 hover:bg-zinc-100',
-              )}
-            >
-              <Icon size={16} className={active ? 'text-brand-700' : 'text-zinc-400'} />
+            <button key={v.key} onClick={() => onGo(v.key)} className={navItem(active)}>
+              <Icon size={16} className={active ? 'text-brand-700 dark:text-brand-400' : 'text-fg-subtle'} />
               <span className="flex-1 text-left">{v.label}</span>
               {badge > 0 && (
                 <span className={cn('tnum rounded-full px-1.5 py-0.5 text-[11px]',
-                  active ? 'bg-white text-brand-800' : 'bg-zinc-100 text-zinc-500')}>{badge}</span>
+                  active ? 'bg-white text-brand-800 dark:bg-brand-500/25 dark:text-brand-200' : 'bg-surface-2 text-fg-muted')}>{badge}</span>
               )}
             </button>
           )
         })}
 
-        <div className="my-2 border-t border-zinc-100" />
-        <button
-          onClick={() => onGo('settings')}
-          className={cn(
-            'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150',
-            view === 'settings' ? 'bg-brand-50 text-brand-800' : 'text-zinc-600 hover:bg-zinc-100',
-          )}
-        >
-          <Settings size={16} className={view === 'settings' ? 'text-brand-700' : 'text-zinc-400'} /> Settings
+        <div className="my-2 border-t border-line" />
+        <button onClick={() => onGo('settings')} className={navItem(view === 'settings')}>
+          <Settings size={16} className={view === 'settings' ? 'text-brand-700 dark:text-brand-400' : 'text-fg-subtle'} /> Settings
         </button>
       </nav>
 
       <button
         onClick={() => onGo('settings')}
-        className="mx-3 mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100"
+        className="mx-3 mt-3 rounded-lg border border-line bg-surface-2 p-3 text-left transition-colors hover:border-line-strong"
       >
-        <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-700">
-          <ShieldCheck size={13} className="text-brand-700" />
+        <div className="flex items-center gap-1.5 text-xs font-medium text-fg">
+          <ShieldCheck size={13} className="text-brand-600" />
           <span className="truncate">{host ?? 'Not connected'}</span>
         </div>
-        <div className="mt-0.5 text-[11px] text-zinc-500">
+        <div className="mt-0.5 text-[11px] text-fg-muted">
           {host ? 'Connected · reads media only' : 'Connect a site in Settings'}
         </div>
       </button>
 
       {/* Account + sign out */}
       <div className="m-3 flex items-center justify-between gap-2 rounded-lg px-1">
-        <span className="flex min-w-0 items-center gap-2 text-xs text-zinc-500">
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-semibold text-brand-800">
+        <span className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-100 text-[11px] font-semibold text-brand-800 dark:bg-brand-500/20 dark:text-brand-300">
             {username.slice(0, 1).toUpperCase()}
           </span>
           <span className="truncate">{username}</span>
         </span>
         <button
           onClick={onLogout}
-          className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+          className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
           title="Sign out"
         >
           <LogOut size={13} /> Sign out
@@ -383,23 +415,61 @@ function SidebarContent({ view, counts, site, onGo, onLogout, username }: {
 }
 
 const toneMap = {
-  sky: 'text-sky-700 bg-sky-50 border-sky-100',
-  brand: 'text-brand-800 bg-brand-50 border-brand-100',
-  red: 'text-red-700 bg-red-50 border-red-100',
-  zinc: 'text-zinc-700 bg-zinc-50 border-zinc-200',
+  sky: 'text-sky-700 bg-sky-50 border-sky-100 dark:text-sky-300 dark:bg-sky-500/15 dark:border-sky-500/20',
+  brand: 'text-brand-800 bg-brand-50 border-brand-100 dark:text-brand-300 dark:bg-brand-500/15 dark:border-brand-500/20',
+  red: 'text-red-700 bg-red-50 border-red-100 dark:text-red-300 dark:bg-red-500/15 dark:border-red-500/20',
 } as const
 
 function StatTile({ label, value, tone, icon: Icon }:
   { label: string; value: number | string; tone: keyof typeof toneMap; icon: typeof Inbox }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</span>
-        <span className={cn('grid h-7 w-7 place-items-center rounded-lg border', toneMap[tone])}>
-          <Icon size={14} />
-        </span>
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4 shadow-sm">
+      <span className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-lg border', toneMap[tone])}>
+        <Icon size={18} />
+      </span>
+      <div className="min-w-0">
+        <div className="tnum text-2xl font-semibold leading-none text-fg">{value}</div>
+        <div className="mt-1 truncate text-xs font-medium text-fg-muted">{label}</div>
       </div>
-      <div className="tnum mt-2 text-2xl font-semibold text-zinc-900">{value}</div>
+    </div>
+  )
+}
+
+function CoverageTile({ pct }: { pct: number }) {
+  const r = 15
+  const c = 2 * Math.PI * r
+  const off = c * (1 - Math.min(1, Math.max(0, pct / 100)))
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4 shadow-sm">
+      <svg width="40" height="40" viewBox="0 0 40 40" className="shrink-0 -rotate-90">
+        <circle cx="20" cy="20" r={r} fill="none" strokeWidth="4" className="stroke-line" />
+        <circle
+          cx="20" cy="20" r={r} fill="none" strokeWidth="4" strokeLinecap="round"
+          className="stroke-brand-500 transition-[stroke-dashoffset] duration-500"
+          strokeDasharray={c} strokeDashoffset={off}
+        />
+      </svg>
+      <div className="min-w-0">
+        <div className="tnum text-2xl font-semibold leading-none text-fg">{pct}%</div>
+        <div className="mt-1 truncate text-xs font-medium text-fg-muted">Alt coverage</div>
+      </div>
+    </div>
+  )
+}
+
+function SkeletonRow() {
+  return (
+    <div className="flex gap-4 border-b border-line px-4 py-4">
+      <div className="skeleton h-[76px] w-[104px] rounded-lg sm:h-[99px] sm:w-[132px]" />
+      <div className="flex-1 space-y-2.5 py-1">
+        <div className="skeleton h-4 w-28 rounded" />
+        <div className="skeleton h-16 w-full rounded-lg" />
+        <div className="skeleton h-3 w-40 rounded" />
+      </div>
+      <div className="hidden w-[112px] shrink-0 space-y-1.5 sm:block">
+        <div className="skeleton h-8 w-full rounded-lg" />
+        <div className="skeleton h-8 w-full rounded-lg" />
+      </div>
     </div>
   )
 }
@@ -409,22 +479,22 @@ function EmptyState({ view, query, onScan, scanning }:
   if (query) {
     return (
       <div className="flex flex-col items-center gap-2 px-4 py-16 text-center">
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-zinc-100 text-zinc-400"><Search size={20} /></span>
-        <p className="text-sm font-medium text-zinc-700">No matches for “{query}”</p>
-        <p className="max-w-xs text-xs text-zinc-500">Try a different filename or word from the alt text.</p>
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-surface-2 text-fg-subtle"><Search size={20} /></span>
+        <p className="text-sm font-medium text-fg">No matches for “{query}”</p>
+        <p className="max-w-xs text-xs text-fg-muted">Try a different filename or word from the alt text.</p>
       </div>
     )
   }
   const review = view === 'pending_review'
   return (
     <div className="flex flex-col items-center gap-3 px-4 py-16 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-700">
+      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
         {review ? <LogoMark px={30} /> : <ImageOff size={22} />}
       </span>
-      <p className="text-sm font-semibold text-zinc-800">
+      <p className="text-sm font-semibold text-fg">
         {review ? 'Your review queue is clear' : 'Nothing here yet'}
       </p>
-      <p className="max-w-sm text-xs leading-relaxed text-zinc-500">
+      <p className="max-w-sm text-xs leading-relaxed text-fg-muted">
         {review
           ? 'Run a scan to find images on your site that are missing alt text — Depicta drafts a description for each, ready for your approval.'
           : 'Approved images will appear here once you apply them.'}

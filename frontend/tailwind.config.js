@@ -1,6 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
+  darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
@@ -9,10 +10,19 @@ export default {
         display: ['"Bricolage Grotesque"', 'Inter', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // Semantic tokens — backed by CSS variables that swap in dark mode (see index.css).
+        bg: 'var(--bg)',
+        surface: 'var(--surface)',
+        'surface-2': 'var(--surface-2)',
+        line: 'var(--line)',
+        'line-strong': 'var(--line-strong)',
+        fg: 'var(--fg)',
+        'fg-muted': 'var(--fg-muted)',
+        'fg-subtle': 'var(--fg-subtle)',
         // Single intentional accent: a precise dark emerald.
         brand: {
           50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7',
-          500: '#12b886', 600: '#0f9d70', 700: '#0c7d59', 800: '#0a6347', 900: '#083f2e',
+          400: '#34d399', 500: '#12b886', 600: '#0f9d70', 700: '#0c7d59', 800: '#0a6347', 900: '#083f2e',
         },
       },
       transitionTimingFunction: {
