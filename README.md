@@ -1,101 +1,133 @@
 # Depicta
 
-AI-generated alt text for WordPress — built human-in-the-loop and security-first.
-Depicta finds images missing alt text, drafts a WCAG-compliant description with a Vision
-model, and writes it back **only after the site owner approves it**, with every change
-reversible.
+**AI-generated alt text for WordPress — human-in-the-loop and security-first.**
 
-## Status
+Depicta scans a WordPress media library for images missing alt text, drafts a concise,
+WCAG-compliant description for each with a Vision model, and writes it back **only after the
+site owner approves it** — with every change fully reversible.
 
-Building in phases. **Phase 1 & 2 are in this repo.**
+[![CI](https://github.com/aulon10/depicta/actions/workflows/ci.yml/badge.svg)](https://github.com/aulon10/depicta/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-brightgreen.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-8-512BD4)](https://dotnet.microsoft.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB)](https://react.dev/)
 
-- [x] **Phase 1 — Architecture & data flow** → [`docs/01-architecture.md`](docs/01-architecture.md)
-- [x] **Phase 2 — Data model & REST API spec** → [`docs/02-data-model-and-api.md`](docs/02-data-model-and-api.md)
-- [x] **Phase 3 — React + Tailwind review UI** (full-site dashboard, side-by-side + bulk approve, working against a mock client) → [`frontend/`](frontend/README.md)
-- [x] **Phase 4 — Vision system prompt** (≤125 chars, WCAG, no "image of" filler) → [`docs/04-vision-prompt.md`](docs/04-vision-prompt.md) + `backend/.../Vision/`
-- [x] **Phase 5 — WordPress plugin PHP** (secure REST routes + revert-safe writes) → [`wordpress-plugin/depicta/`](wordpress-plugin/depicta/)
-- [x] **Backend service layer & end-to-end wiring** — scan/analyze/apply/revert logic, background worker, WP client, credential encryption, live-API frontend toggle → [`backend/README.md`](backend/README.md)
+**Live:** app → [depicta-1.onrender.com](https://depicta-1.onrender.com) · API → [depicta.onrender.com](https://depicta.onrender.com)
 
-## Decisions (v1)
+> The free hosting tier sleeps after inactivity, so the first request may take ~30–60s to wake.
 
-- **Backend:** .NET 8 + EF Core (PostgreSQL by default)
-- **Frontend:** React + Tailwind
-- **WordPress:** lightweight companion plugin, two REST routes only
-- **Vision:** provider-abstracted (`IVisionProvider`), Claude Vision as the default
-- **Scope:** single site (multi-tenant is a later migration, not a rewrite)
+---
 
-## Layout
+## Why it exists
+
+An AI that can write to your live site only works if you can trust it. Depicta is built around
+one rule: **the tool never changes a site on its own.** It can do exactly two things to a
+WordPress site — read images that are missing alt text, and set alt text on a single image the
+owner has explicitly approved. Nothing else.
+
+## Screenshots
+
+| Review queue (dark) | Review queue (light) |
+|---|---|
+| ![Review queue, dark](docs/screenshots/dashboard-dark.png) | ![Review queue, light](docs/screenshots/dashboard-light.png) |
+
+| Settings — connection, security & scan history |
+|---|
+| ![Settings](docs/screenshots/settings-dark.png) |
+
+## How it works
 
 ```
-depicta/
-├── docs/
-│   ├── 01-architecture.md          # Phase 1: components, data flow, security
-│   └── 02-data-model-and-api.md    # Phase 2: schema, state machine, REST contracts
-├── backend/
-│   └── Depicta.Api/                 # .NET 8 Web API
-│       ├── Domain/Enums             # MediaItemState, ScanRunStatus
-│       ├── Domain/Entities          # Site, MediaItem, AltProposal, AltRevision, ScanRun
-│       ├── Domain/StateMachine      # enforced MediaItem transitions
-│       ├── Infrastructure           # DepictaDbContext (EF config)
-│       ├── Abstractions             # IVisionProvider, IWordPressClient
-│       ├── Vision                   # ClaudeVisionProvider + AltTextSanitizer (Phase 4)
-│       ├── Contracts                # request/response DTOs
-│       └── Controllers              # REST contracts
-├── frontend/                        # React + TS + Tailwind (Vite) — Phase 3
-└── wordpress-plugin/depicta/        # PHP companion plugin — Phase 5
-    ├── depicta.php
-    └── includes/                    # REST controller + admin settings
+Scan WordPress  →  AI drafts alt text  →  Owner reviews & edits  →  Approve  →  Written to WP  →  1-click revert
+   (plugin)          (background worker)        (React UI)                       (signed call)
 ```
 
-## Run the backend (once Phase 3 fills in the service layer)
+Every image moves through an enforced **state machine** — it can never reach *Applied* (a write
+to the live site) without passing through *Approved*.
 
+## Key features
+
+- **Human-in-the-loop:** nothing is written until you click Approve; inline editing with a live
+  125-character WCAG counter.
+- **Reversible:** every change stores the previous value for one-click revert.
+- **Least-privilege WordPress plugin:** two REST routes, scoped to attachment alt text only.
+- **Provider-abstracted Vision:** Claude Vision by default, swappable behind `IVisionProvider`.
+- **Image right-sizing:** large/AVIF/HEIC images are resized and re-encoded before upload to cut
+  tokens and cost.
+- **Resilient worker:** transient failures retry with exponential backoff; one bad image never
+  blocks the batch.
+- **Polished UI:** dark/light themes, responsive, coverage ring, skeleton loading.
+
+## Security (the differentiator)
+
+- **JWT admin auth** on every endpoint (a fallback policy means no controller can forget it);
+  passwords hashed with PBKDF2-HMAC-SHA256.
+- **HMAC-signed WordPress calls** — the shared secret never travels the wire; a timestamp + a
+  one-time nonce make a captured request useless to replay.
+- **Credentials encrypted at rest** (ASP.NET Data Protection).
+- **Rate limiting**, security headers, HTTPS/HSTS, and an explicit CORS allow-list.
+- **Secrets out of code** — signing key, admin hash and API key come from the environment.
+
+## Tech stack
+
+| Layer | Tech |
+|---|---|
+| Backend | .NET 8, ASP.NET Core Web API, EF Core 8 |
+| Database | PostgreSQL (prod) · SQLite (local dev) |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
+| WordPress | PHP companion plugin (2 REST routes) |
+| Vision | Anthropic Claude (provider-abstracted) |
+| Tests/CI | xUnit (unit + integration) · GitHub Actions |
+| Deploy | Docker · Render · Neon |
+
+## Tests & CI
+
+47 tests (xUnit) cover the core logic — the approval state machine, the alt-text sanitizer, the
+PBKDF2 hasher, the HMAC request signer — plus API integration tests that boot the real app and
+verify the auth boundary. GitHub Actions runs `dotnet test` and `npm run build` on every push.
+
+```bash
+cd backend
+dotnet test
+```
+
+## Run locally
+
+**Backend** (SQLite, zero-setup):
 ```bash
 cd backend/Depicta.Api
-dotnet restore
-# set ConnectionStrings:Depicta (PostgreSQL) in appsettings.Development.json or env
-dotnet ef migrations add InitialCreate
-dotnet ef database update
-dotnet run
+dotnet user-secrets set "Vision:Claude:ApiKey" "sk-ant-..."
+dotnet run          # http://localhost:5080  · Swagger at /swagger
 ```
 
-The core security rule: the backend can never modify a site on its own — it can only call
-the plugin's `set-alt` route, and only for an item the owner has explicitly approved.
-
-## Deployment (Docker)
-
-The whole stack — PostgreSQL, the .NET API, and the nginx-served React app — runs with one
-command. You need Docker, and the initial EF migration generated once (PostgreSQL applies
-migrations automatically on startup).
-
-**1. Generate the migration** (one-time — see [`backend/README.md`](backend/README.md) → *Database & migrations*):
-
+**Frontend:**
 ```bash
-cd backend/Depicta.Api
-dotnet ef migrations add InitialCreate
-cd ../..
+cd frontend
+npm install
+npm run dev         # http://localhost:5173
 ```
 
-**2. Create your secrets file** (never committed — `.env` is gitignored):
+Dev admin login: `admin` / `depicta-dev-2026`. Full backend, WordPress and deployment docs live
+in [`backend/README.md`](backend/README.md) and [`docs/`](docs/).
 
-```bash
-cp .env.example .env
-# fill in the values:
-#   AUTH_SIGNING_KEY   ->  openssl rand -base64 48
-#   ADMIN_PASSWORD_HASH -> dotnet run --project backend/Depicta.Api -- hash "your-password"
-#   VISION_API_KEY, POSTGRES_PASSWORD
-```
+## Deployment
 
-**3. Bring it up:**
+Everything is containerized (`docker-compose.yml`) and deployed as: a Docker web service (API) +
+static site (frontend) on Render, with PostgreSQL on Neon. See
+[`backend/README.md`](backend/README.md) → *Deployment*.
 
-```bash
-docker compose up --build
-```
+## Roadmap
 
-App → `http://localhost:8081` · API + Swagger → `http://localhost:8080`
+- [x] Core pipeline: scan → AI → review → approve → apply → revert
+- [x] Security hardening (auth, HMAC signing, encryption, rate limiting)
+- [x] Data & reliability (PostgreSQL + migrations, image resizing, worker retries)
+- [x] Testing + CI (xUnit, GitHub Actions)
+- [x] Docker + live deployment
+- [ ] Monitoring, alerts & error tracking
+- [ ] In-app "connect site" flow for production
+- [ ] Multi-tenant (SaaS)
 
-### Hosting
+## License
 
-Every piece is a standard container, so it runs on any container host: the API + PostgreSQL on a
-container platform with a free tier, and the static frontend on any static host — both give you an
-`https` subdomain without buying a domain. The exact provider and steps are finalized at deploy
-time (free-tier terms change), but nothing in the app is provider-specific.
+MIT — see [LICENSE](LICENSE).
+
+Built by [Aulon Murtezi](https://github.com/aulon10).
