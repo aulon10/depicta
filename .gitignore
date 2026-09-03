@@ -1,0 +1,16 @@
+# .NET
+backend/**/bin/
+backend/**/obj/
+backend/**/*.db
+backend/**/*.db-*
+# Data Protection key ring (never commit — holds the keys that decrypt stored credentials)
+backend/**/dp-keys/
+# Test artifacts
+backend/**/TestResults/
+backend/**/depicta_test_*.db*
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+# misc
+.DS_Store
