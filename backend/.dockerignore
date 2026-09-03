@@ -1,0 +1,8 @@
+**/bin/
+**/obj/
+**/dp-keys/
+**/*.db
+**/*.db-*
+**/TestResults/
+Depicta.Tests/
+**/.vs/

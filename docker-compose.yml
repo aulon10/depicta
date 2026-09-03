@@ -1,0 +1,63 @@
+# Depicta — full stack in containers: PostgreSQL + .NET API + nginx-served React app.
+# Copy .env.example to .env and fill in the secrets first (see README "Deployment").
+#
+#   docker compose up --build
+#
+# App:  http://localhost:8081     API/Swagger: http://localhost:8080
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: depicta
+      POSTGRES_USER: depicta
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-depicta}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U depicta"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Database__Provider: postgres
+      ConnectionStrings__Depicta: "Host=db;Database=depicta;Username=depicta;Password=${POSTGRES_PASSWORD:-depicta}"
+      # --- secrets: set these in .env ---
+      Auth__SigningKey: ${AUTH_SIGNING_KEY}
+      Auth__Admin__Username: ${ADMIN_USERNAME:-admin}
+      Auth__Admin__PasswordHash: ${ADMIN_PASSWORD_HASH}
+      Vision__Claude__ApiKey: ${VISION_API_KEY}
+      # DP keys persist on a volume so stored credentials survive restarts.
+      DataProtection__KeyPath: /keys
+      # Allow the web origin to call the API (browser sends the bearer token).
+      Cors__AllowedOrigins__0: ${FRONTEND_ORIGIN:-http://localhost:8081}
+    volumes:
+      - dpkeys:/keys
+    ports:
+      - "8080:8080"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the build; point the browser at the API's public URL.
+        VITE_API_BASE: ${VITE_API_BASE:-http://localhost:8080}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8081:80"
+
+volumes:
+  dbdata:
+  dpkeys:

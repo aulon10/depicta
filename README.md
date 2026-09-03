@@ -60,3 +60,42 @@ dotnet run
 
 The core security rule: the backend can never modify a site on its own — it can only call
 the plugin's `set-alt` route, and only for an item the owner has explicitly approved.
+
+## Deployment (Docker)
+
+The whole stack — PostgreSQL, the .NET API, and the nginx-served React app — runs with one
+command. You need Docker, and the initial EF migration generated once (PostgreSQL applies
+migrations automatically on startup).
+
+**1. Generate the migration** (one-time — see [`backend/README.md`](backend/README.md) → *Database & migrations*):
+
+```bash
+cd backend/Depicta.Api
+dotnet ef migrations add InitialCreate
+cd ../..
+```
+
+**2. Create your secrets file** (never committed — `.env` is gitignored):
+
+```bash
+cp .env.example .env
+# fill in the values:
+#   AUTH_SIGNING_KEY   ->  openssl rand -base64 48
+#   ADMIN_PASSWORD_HASH -> dotnet run --project backend/Depicta.Api -- hash "your-password"
+#   VISION_API_KEY, POSTGRES_PASSWORD
+```
+
+**3. Bring it up:**
+
+```bash
+docker compose up --build
+```
+
+App → `http://localhost:8081` · API + Swagger → `http://localhost:8080`
+
+### Hosting
+
+Every piece is a standard container, so it runs on any container host: the API + PostgreSQL on a
+container platform with a free tier, and the static frontend on any static host — both give you an
+`https` subdomain without buying a domain. The exact provider and steps are finalized at deploy
+time (free-tier terms change), but nothing in the app is provider-specific.
