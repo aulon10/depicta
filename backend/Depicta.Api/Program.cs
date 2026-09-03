@@ -35,6 +35,9 @@ builder.Services.AddControllers().AddJsonOptions(o =>
 });
 builder.Services.AddEndpointsApiExplorer();
 
+// Lightweight liveness probe for uptime monitoring (also keeps the free instance awake).
+builder.Services.AddHealthChecks();
+
 // --- Swagger with a Bearer auth button so the API can be exercised while authenticated ---
 builder.Services.AddSwaggerGen(c =>
 {
@@ -224,6 +227,10 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// Public liveness endpoint — anonymous so uptime monitors (and Render) can reach it without a token.
+app.MapHealthChecks("/health").AllowAnonymous();
+
 app.Run();
 
 // Exposed so integration tests can reference the entry-point assembly.
