@@ -1,0 +1,30 @@
+version: 2
+
+# Dependabot keeps dependencies patched and opens PRs for security fixes and version updates.
+# Grouped so you get one tidy PR per ecosystem instead of a flood.
+updates:
+  # Backend — .NET / NuGet (covers Depicta.Api and Depicta.Tests via the solution)
+  - package-ecosystem: "nuget"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      dotnet:
+        patterns: ["*"]
+
+  # Frontend — npm
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      npm:
+        patterns: ["*"]
+
+  # The GitHub Actions used in CI
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

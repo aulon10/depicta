@@ -122,7 +122,7 @@ static site (frontend) on Render, with PostgreSQL on Neon. See
 - [x] Data & reliability (PostgreSQL + migrations, image resizing, worker retries)
 - [x] Testing + CI (xUnit, GitHub Actions)
 - [x] Docker + live deployment
-- [ ] Monitoring, alerts & error tracking
+- [x] Monitoring, alerts, error tracking & dependency scanning
 - [ ] In-app "connect site" flow for production
 - [ ] Multi-tenant (SaaS)
 
